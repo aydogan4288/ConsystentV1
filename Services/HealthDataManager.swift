@@ -1,76 +1,79 @@
-//
-//  HealthDataManager.swift
-//  ConsystentV1
-//
-//  Created by Ferhat Aydogan on 11/30/23.
-//
-
 import Foundation
 import HealthKit
 
 class HealthDataManager {
-    private let healthStore = HKHealthStore()
+    var healthStore: HKHealthStore
 
+    init(healthStore: HKHealthStore) {
+        self.healthStore = healthStore
+    }
+
+    // Request Authorization for HealthKit
     func requestAuthorization(completion: @escaping (Bool, Error?) -> Void) {
-        // Check if Health Data is available
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(false, HealthError.dataNotAvailable)
             return
         }
-
-        // Define the types of data to access
-        guard let distanceType = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
-              let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
-            completion(false, HealthError.dataNotAvailable)
-            return
-        }
-
-        let typesToRead: Set<HKObjectType> = [distanceType, heartRateType]
-
-        // Request authorization to access data
-        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { (success, error) in
+        
+        let typesToRead: Set<HKObjectType> = [
+            HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!,
+            HKObjectType.quantityType(forIdentifier: .heartRate)!
+        ]
+        
+        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
             completion(success, error)
         }
     }
-    
-    func fetchRunningData(completion: @escaping ([HKQuantitySample]?, Error?) -> Void) {
-            guard let distanceType = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) else {
-                completion(nil, HealthError.dataNotAvailable)
+
+    // Fetch Distance Data
+    func fetchDistanceData(completion: @escaping (Double?, Error?) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            completion(nil, HealthError.dataNotAvailable)
+            return
+        }
+
+        guard let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning) else {
+            completion(nil, HealthError.dataTypeNotAvailable)
+            return
+        }
+
+        let query = HKStatisticsQuery(quantityType: distanceType, quantitySamplePredicate: nil, options: .cumulativeSum) { _, result, error in
+            guard let result = result, error == nil else {
+                completion(nil, error)
                 return
             }
 
-            let now = Date()
-            let startOfDay = Calendar.current.startOfDay(for: now)
-            let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: now, options: .strictStartDate)
-            
-            let query = HKSampleQuery(sampleType: distanceType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
-                guard let samples = samples as? [HKQuantitySample], error == nil else {
-                    completion(nil, error)
-                    return
-                }
-                completion(samples, nil)
-            }
-
-            healthStore.execute(query)
+            let totalDistance = result.sumQuantity()?.doubleValue(for: .mile())
+            completion(totalDistance, nil)
         }
 
-    func calculatePace(for samples: [HKQuantitySample]) -> Double {
-            let totalDistance = samples.reduce(0.0) { sum, sample in
-                sum + sample.quantity.doubleValue(for: .mile())
-            }
+        healthStore.execute(query)
+    }
 
-            let totalDuration = samples.reduce(0.0) { sum, sample in
-                sum + sample.endDate.timeIntervalSince(sample.startDate)
-            }
-
-            // Avoid division by zero
-            guard totalDistance > 0 else { return 0 }
-
-            let paceInSecondsPerMile = totalDuration / totalDistance
-            let paceInMinutesPerMile = paceInSecondsPerMile / 60
-
-            return paceInMinutesPerMile
+    // Fetch Heart Rate Data
+    func fetchHeartRateData(completion: @escaping (Double?, Error?) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            completion(nil, HealthError.dataNotAvailable)
+            return
         }
+
+        guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
+            completion(nil, HealthError.dataTypeNotAvailable)
+            return
+        }
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+
+        let query = HKSampleQuery(sampleType: heartRateType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, error in
+            guard let samples = samples, let mostRecentSample = samples.first as? HKQuantitySample, error == nil else {
+                completion(nil, error)
+                return
+            }
+
+            let heartRate = mostRecentSample.quantity.doubleValue(for: HKUnit(from: "count/min"))
+            completion(heartRate, nil)
+        }
+
+        healthStore.execute(query)
+    }
 }
-
-

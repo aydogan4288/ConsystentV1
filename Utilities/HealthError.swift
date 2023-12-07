@@ -9,7 +9,8 @@ import Foundation
 
 enum HealthError: Error {
     case dataNotAvailable
-    case unauthorized
-    case unknownError
-    // Add other error cases as needed
+    case dataTypeNotAvailable
+    case unauthorizedAccess
+    case queryFailed
+    // Add more specific error cases as needed
 }

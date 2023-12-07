@@ -5,7 +5,6 @@
 //  Created by Ferhat Aydogan on 11/30/23.
 //
 
-import Foundation
 import SwiftUI
 
 struct RunningSessionView: View {
@@ -13,10 +12,22 @@ struct RunningSessionView: View {
 
     var body: some View {
         VStack {
-            Text("Distance: \(viewModel.distance, specifier: "%.2f") miles")
-            Text("Heart Rate: \(viewModel.heartRate, specifier: "%.0f") bpm")
-            Text("Pace: \(viewModel.pace, specifier: "%.2f") min/mile")
+            if viewModel.isError {
+                Text("An error occurred. Please try again.")
+            } else {
+                Text("Distance: \(viewModel.distance, specifier: "%.2f") miles")
+                Text("Heart Rate: \(viewModel.heartRate, specifier: "%.0f") bpm")
+            }
         }
     }
 }
+
+// The following code is usually at the bottom of the Swift file for testing in the Xcode preview provider.
+#if DEBUG
+struct RunningSessionView_Previews: PreviewProvider {
+    static var previews: some View {
+        RunningSessionView(viewModel: RunningSessionViewModel())
+    }
+}
+#endif
 
